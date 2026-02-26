@@ -1,0 +1,244 @@
+// BCX — Bharat Carbon Exchange
+// Prisma Schema for PostgreSQL (Supabase / Neon / Railway)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(buyer)
+  organization String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  projectsDeveloped CarbonProject[]    @relation("DeveloperProjects")
+  projectsApproved  CarbonProject[]    @relation("ApproverProjects")
+  transactions      Transaction[]      @relation("UserTransactions")
+  sentTransactions  Transaction[]      @relation("SentTransactions")
+  holdings          BuyerHolding[]
+  cartItems         CartItem[]
+  retiredCredits    CarbonCredit[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  admin
+  developer
+  buyer
+}
+
+// ─── Carbon Projects ─────────────────────────────────────────────────────────
+
+model CarbonProject {
+  id               String        @id @default(cuid())
+  name             String
+  developerId      String
+  approvedById     String?
+  sector           ProjectSector
+  location         String
+  state            String
+  vintage          Int
+  totalCredits     Int
+  availableCredits Int
+  pricePerCredit   Float
+  status           ProjectStatus @default(draft)
+  integrityScore   Int           @default(0)
+  methodology      String
+  description      String        @db.Text
+  co2Reduction     Int
+  sdgGoals         Int[]
+  imageUrl         String?
+  createdAt        DateTime      @default(now())
+  approvedAt       DateTime?
+  updatedAt        DateTime      @updatedAt
+
+  // Relations
+  developer         User                @relation("DeveloperProjects", fields: [developerId], references: [id])
+  approvedBy        User?               @relation("ApproverProjects", fields: [approvedById], references: [id])
+  credits           CarbonCredit[]
+  transactions      Transaction[]
+  holdings          BuyerHolding[]
+  cartItems         CartItem[]
+  complianceAlerts  ComplianceAlert[]
+  aiValidations     AIValidationResult[]
+
+  @@map("carbon_projects")
+}
+
+enum ProjectSector {
+  RenewableEnergy  @map("Renewable Energy")
+  Afforestation
+  MethaneCapture   @map("Methane Capture")
+  EnergyEfficiency @map("Energy Efficiency")
+  BlueCarbon       @map("Blue Carbon")
+  SoilCarbon       @map("Soil Carbon")
+  WasteManagement  @map("Waste Management")
+}
+
+enum ProjectStatus {
+  draft
+  pending
+  approved
+  rejected
+  active
+}
+
+// ─── Carbon Credits ──────────────────────────────────────────────────────────
+
+model CarbonCredit {
+  id           String       @id @default(cuid())
+  projectId    String
+  serialNumber String       @unique
+  vintage      Int
+  quantity     Int
+  status       CreditStatus @default(issued)
+  issuedToId   String?
+  issuedAt     DateTime     @default(now())
+  retiredAt    DateTime?
+  retiredById  String?
+
+  // Relations
+  project    CarbonProject @relation(fields: [projectId], references: [id])
+  issuedTo   User?         @relation(fields: [issuedToId], references: [id])
+
+  @@map("carbon_credits")
+}
+
+enum CreditStatus {
+  issued
+  traded
+  retired
+}
+
+// ─── Transactions ─────────────────────────────────────────────────────────────
+
+model Transaction {
+  id             String          @id @default(cuid())
+  type           TransactionType
+  projectId      String
+  fromUserId     String?
+  toUserId       String
+  quantity       Int
+  pricePerCredit Float?
+  totalValue     Float?
+  status         TxStatus        @default(confirmed)
+  blockHash      String?
+  timestamp      DateTime        @default(now())
+
+  // Relations
+  project  CarbonProject @relation(fields: [projectId], references: [id])
+  fromUser User?         @relation("SentTransactions", fields: [fromUserId], references: [id])
+  toUser   User          @relation("UserTransactions", fields: [toUserId], references: [id])
+
+  @@map("transactions")
+}
+
+enum TransactionType {
+  issuance
+  transfer
+  retirement
+  purchase
+}
+
+enum TxStatus {
+  confirmed
+  pending
+  failed
+}
+
+// ─── Buyer Holdings ───────────────────────────────────────────────────────────
+
+model BuyerHolding {
+  id          String   @id @default(cuid())
+  buyerId     String
+  projectId   String
+  quantity    Int
+  avgPrice    Float
+  purchasedAt DateTime @default(now())
+
+  // Relations
+  buyer   User          @relation(fields: [buyerId], references: [id])
+  project CarbonProject @relation(fields: [projectId], references: [id])
+
+  @@unique([buyerId, projectId])
+  @@map("buyer_holdings")
+}
+
+// ─── Cart Items ───────────────────────────────────────────────────────────────
+
+model CartItem {
+  id             String   @id @default(cuid())
+  userId         String
+  projectId      String
+  quantity       Int
+  pricePerCredit Float
+  addedAt        DateTime @default(now())
+
+  // Relations
+  user    User          @relation(fields: [userId], references: [id])
+  project CarbonProject @relation(fields: [projectId], references: [id])
+
+  @@unique([userId, projectId])
+  @@map("cart_items")
+}
+
+// ─── Compliance Alerts ────────────────────────────────────────────────────────
+
+model ComplianceAlert {
+  id         String    @id @default(cuid())
+  type       AlertType
+  entity     String
+  message    String
+  projectId  String?
+  createdAt  DateTime  @default(now())
+  resolved   Boolean   @default(false)
+  resolvedAt DateTime?
+
+  // Relations
+  project CarbonProject? @relation(fields: [projectId], references: [id])
+
+  @@map("compliance_alerts")
+}
+
+enum AlertType {
+  warning
+  critical
+  info
+}
+
+// ─── AI Validation Results ────────────────────────────────────────────────────
+
+model AIValidationResult {
+  id             String   @id @default(cuid())
+  projectId      String
+  integrityScore Int
+  riskLevel      RiskLevel
+  findings       String[]
+  recommendations String[]
+  modelUsed      String
+  validatedAt    DateTime @default(now())
+
+  // Relations
+  project CarbonProject @relation(fields: [projectId], references: [id])
+
+  @@map("ai_validation_results")
+}
+
+enum RiskLevel {
+  low
+  medium
+  high
+}

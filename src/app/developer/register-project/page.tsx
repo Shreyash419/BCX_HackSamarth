@@ -83,12 +83,13 @@ export default function RegisterProjectPage() {
     setSubmitting(true);
     const res = await registerProject({
       ...form,
+      sector: form.sector as import("@/lib/types").ProjectSector,
       co2Reduction: parseInt(form.co2Reduction),
       totalCredits: parseInt(form.totalCredits),
       pricePerCredit: parseInt(form.pricePerCredit),
       vintage: parseInt(form.vintage),
-      developerId: user?.id,
-      developerName: user?.organization,
+      developerId: user?.id ?? "",
+      developerName: user?.organization ?? "",
       status: "pending",
     });
     setSubmitting(false);
