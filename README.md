@@ -1,7 +1,7 @@
 # 🌱 BCX — Bharat Carbon Exchange
 
 > **India's Official Carbon Credit Registry, Marketplace, and Compliance Dashboard**
-> Built on Next.js 15 App Router · Phase 1: Frontend-first with mock data layer
+> Built on Next.js 15 App Router · PostgreSQL + Prisma ORM + Supabase · Full-Stack Production Ready
 
 ---
 
@@ -10,8 +10,8 @@
 ```
 BCX Platform (Next.js 15)
 ├── Role-Based Access Control (Admin / Developer / Buyer)
-├── Server Actions (Mock → PostgreSQL / Microservices)
-├── GenAI Layer (Mock → Genkit + Vertex AI)
+├── Server Actions → PostgreSQL via Prisma ORM (Supabase)
+├── GenAI Layer (Mock → Genkit + Vertex AI ready)
 └── UI: ShadCN-compatible components + Tailwind CSS
 ```
 
@@ -19,13 +19,33 @@ BCX Platform (Next.js 15)
 
 ## 🚀 Quick Start
 
+### 1. Clone & Install
 ```bash
+git clone https://github.com/Shreyash419/BCX_HackSamarth.git
+cd BCX_HackSamarth
 npm install
+```
+
+### 2. Setup Environment
+```bash
+cp .env.example .env
+# Fill in your DATABASE_URL from Supabase project settings
+```
+
+### 3. Setup Database
+```bash
+npm run db:generate   # Generate Prisma client
+npm run db:push       # Push schema to PostgreSQL
+npm run db:seed       # Seed demo users & data
+```
+
+### 4. Run Dev Server
+```bash
 npm run dev
 # → http://localhost:3000
 ```
 
-### Demo Credentials
+### Demo Credentials (seeded automatically)
 
 | Role | Email | Password | Redirects to |
 |------|-------|----------|-------------|
@@ -38,39 +58,76 @@ npm run dev
 ## 📁 Project Structure
 
 ```
-src/
-├── app/                        # Next.js App Router pages
-│   ├── admin/
-│   │   ├── dashboard/          # Registry stats + compliance alerts
-│   │   ├── projects/           # Review & approve projects
-│   │   └── credits/            # Issue / retire carbon credits
-│   ├── developer/
-│   │   ├── dashboard/          # Analytics overview + quick actions
-│   │   ├── projects/           # Project list table
-│   │   └── register-project/   # 3-step registration form
-│   ├── buyer/
-│   │   ├── dashboard/          # Portfolio summary + net zero progress
-│   │   └── history/            # Purchase & retirement history
-│   ├── marketplace/            # Credit marketplace with search + filters
-│   ├── ledger/                 # Public transaction ledger
-│   ├── ai-assistant/           # AI validation flows (Genkit-ready)
-│   └── profile/                # User profile settings
+BCX_HackSamarth/
+├── prisma/
+│   ├── schema.prisma           # Full PostgreSQL schema (8 models)
+│   ├── seed.ts                 # Demo data seeder (users, projects, credits)
+│   └── setup.sql               # Raw SQL setup (for direct DB init)
 │
-├── actions/
-│   └── actions.ts              # All server actions (data access layer)
+├── prisma.config.ts            # Prisma configuration
 │
-├── components/
-│   └── layout/
-│       └── app-shell.tsx       # Sidebar + header + role-aware nav
-│
-├── context/
-│   ├── AuthContext.tsx         # Mock auth + session management
-│   └── CartContext.tsx         # Buyer cart state
-│
-└── lib/
-    ├── types.ts                # Domain TypeScript models
-    ├── mock-data.ts            # Phase 1 data store
-    └── ai-flows.ts             # Genkit-structured AI flows
+└── src/
+    ├── app/                    # Next.js App Router pages
+    │   ├── admin/
+    │   │   ├── dashboard/      # Registry stats + compliance alerts
+    │   │   ├── projects/       # Review & approve projects
+    │   │   └── credits/        # Issue / retire carbon credits
+    │   ├── developer/
+    │   │   ├── dashboard/      # Analytics overview + quick actions
+    │   │   ├── projects/       # Project list table
+    │   │   └── register-project/ # 3-step registration form
+    │   ├── buyer/
+    │   │   ├── dashboard/      # Portfolio summary + net zero progress
+    │   │   └── history/        # Purchase & retirement history
+    │   ├── api/auth/register/  # REST endpoint for user registration
+    │   ├── marketplace/        # Credit marketplace with search + filters
+    │   ├── ledger/             # Public transaction ledger
+    │   ├── ai-assistant/       # AI validation flows (Genkit-ready)
+    │   └── profile/            # User profile settings
+    │
+    ├── actions/
+    │   └── actions.ts          # All server actions (Prisma-backed data access layer)
+    │
+    ├── components/
+    │   └── layout/
+    │       └── app-shell.tsx   # Sidebar + header + role-aware nav
+    │
+    ├── context/
+    │   ├── AuthContext.tsx     # Auth + session management
+    │   └── CartContext.tsx     # Buyer cart state
+    │
+    └── lib/
+        ├── types.ts            # Domain TypeScript models
+        ├── prisma.ts           # Prisma client singleton
+        ├── mock-data.ts        # Fallback / dev data store
+        └── ai-flows.ts         # Genkit-structured AI flows
+```
+
+---
+
+## 🗃️ Database Schema
+
+**8 Prisma Models** on PostgreSQL (Supabase):
+
+| Model | Description |
+|-------|-------------|
+| `User` | Auth + role (admin / developer / buyer) |
+| `CarbonProject` | Project details, status, integrity score, SDG goals |
+| `CarbonCredit` | Individual credit tokens with serial numbers |
+| `Transaction` | Immutable ledger of all buy/sell/retire events |
+| `BuyerHolding` | Portfolio holdings per buyer per project |
+| `CartItem` | Active shopping cart items |
+| `ComplianceAlert` | Regulatory alerts tied to projects |
+| `AIValidationResult` | AI integrity/validation result logs |
+
+```bash
+# Available DB commands
+npm run db:generate   # Regenerate Prisma client after schema changes
+npm run db:push       # Sync schema to database (no migration files)
+npm run db:migrate    # Generate migration files + apply
+npm run db:seed       # Seed demo data
+npm run db:studio     # Open Prisma Studio (GUI)
+npm run db:reset      # Reset + re-migrate + re-seed
 ```
 
 ---
@@ -81,8 +138,8 @@ src/
 - ✅ Statistics dashboard (credits issued, traded, retired, pending)
 - ✅ Monthly volume bar chart
 - ✅ Compliance alerts table (critical/warning/info)
-- ✅ Project review with approve/reject actions
-- ✅ Carbon credit issuance with serial number generation
+- ✅ Project review with approve/reject actions (Prisma-backed)
+- ✅ Carbon credit issuance with serial number generation (PostgreSQL)
 
 ### Project Developer
 - ✅ Analytics overview with revenue estimates
@@ -103,7 +160,7 @@ src/
 - ✅ Cart state management
 
 ### Public Ledger
-- ✅ Immutable transaction log
+- ✅ Immutable transaction log (PostgreSQL persisted)
 - ✅ Search by project, entity, block hash
 - ✅ Transaction type badges (issuance/purchase/transfer/retirement)
 
@@ -115,25 +172,7 @@ src/
 
 ---
 
-## 🔌 Future-Proof Architecture
-
-### Phase 2: Real Database
-```typescript
-// Replace in actions/actions.ts:
-// BEFORE (mock):
-return MOCK_PROJECTS.filter(p => p.status === 'active')
-
-// AFTER (Prisma/PostgreSQL):
-return await prisma.project.findMany({ where: { status: 'active' } })
-```
-
-### Phase 2: JWT Authentication
-```typescript
-// Replace in actions/actions.ts loginUser():
-// Generate JWT, set httpOnly cookie
-const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET)
-cookies().set('bcx_token', token, { httpOnly: true, secure: true })
-```
+## 🔌 Roadmap
 
 ### Phase 3: Genkit AI Integration
 ```typescript
@@ -175,12 +214,12 @@ await bcxContract.issueCredits(projectId, quantity, serialNumbers)
 
 ---
 
-## 🛡️ Security Roadmap
+## 🛡️ Security
 
-- Phase 1: Client-side sessionStorage (demo only)
-- Phase 2: httpOnly JWT cookies + CSRF tokens
-- Phase 3: RBAC middleware in Next.js Middleware
-- Phase 4: Rate limiting, WAF, CERT-In compliance audit
+- ✅ Phase 1 & 2: bcryptjs password hashing (saltRounds=10), stored in PostgreSQL
+- Phase 3: httpOnly JWT cookies + CSRF tokens
+- Phase 4: RBAC middleware in Next.js Middleware
+- Phase 5: Rate limiting, WAF, CERT-In compliance audit
 
 ---
 
@@ -191,10 +230,11 @@ await bcxContract.issueCredits(projectId, quantity, serialNumbers)
 | Framework | Next.js 15 (App Router) |
 | Language | TypeScript 5 |
 | Styling | Tailwind CSS 3 |
+| ORM | Prisma (v7) |
+| Database | PostgreSQL via Supabase |
+| Auth | bcryptjs password hashing + session context |
 | State | React Context + Server Actions |
 | AI (future) | Genkit + Vertex AI Gemini |
-| DB (future) | PostgreSQL + Prisma |
-| Auth (future) | JWT + httpOnly cookies |
 | Ledger (future) | Polygon blockchain |
 
 ---
@@ -208,4 +248,4 @@ await bcxContract.issueCredits(projectId, quantity, serialNumbers)
 
 ---
 
-*BCX Platform v1.0 · Phase 1 Frontend · Built for future-proof enterprise carbon trading*
+*BCX Platform v2.0 · Full-Stack: Next.js 15 + Prisma + Supabase PostgreSQL · Built for enterprise-grade carbon trading*
