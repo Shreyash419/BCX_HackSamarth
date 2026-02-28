@@ -19,7 +19,33 @@ const STATUS_CONFIG: Record<
   rejected: { label: "Rejected", color: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500" },
 };
 
-function IntegrityBar({ score }: { score: number }) {
+function IntegrityBar({ score }: { score: number | undefined }) {
+  if (score === undefined) {
+    return (
+      <div className="space-y-1">
+        <div className="flex justify-between text-xs">
+          <span className="text-slate-500">Integrity Score</span>
+          <span className="font-medium text-slate-400">Calculating...</span>
+        </div>
+        <div className="integrity-bar">
+          <div className="integrity-fill bg-slate-200 animate-pulse" style={{ width: "100%" }} />
+        </div>
+      </div>
+    );
+  }
+  if (score === -1) {
+    return (
+      <div className="space-y-1">
+        <div className="flex justify-between text-xs">
+          <span className="text-slate-500">Integrity Score</span>
+          <span className="font-medium text-slate-400">-</span>
+        </div>
+        <div className="integrity-bar">
+          <div className="integrity-fill bg-slate-200" style={{ width: "0%" }} />
+        </div>
+      </div>
+    );
+  }
   const color =
     score >= 85 ? "bg-green-500" : score >= 70 ? "bg-amber-400" : "bg-red-400";
   const label =
@@ -42,6 +68,7 @@ export default function DeveloperDashboardPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<CarbonProject[]>([]);
   const [loading, setLoading] = useState(true);
+  const [integrityScores, setIntegrityScores] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== "developer")) router.push("/login");
@@ -55,6 +82,30 @@ export default function DeveloperDashboardPage() {
       });
     }
   }, [user]);
+
+  useEffect(() => {
+    if (projects.length === 0) return;
+    Promise.all(
+      projects.map(async (project) => {
+        try {
+          const res = await fetch("/api/integrity-score", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ description: project.description }),
+          });
+          if (!res.ok) return { id: project.id, score: -1 };
+          const data = await res.json();
+          return { id: project.id, score: data.score ?? -1 };
+        } catch {
+          return { id: project.id, score: -1 };
+        }
+      })
+    ).then((results) => {
+      const scores: Record<string, number> = {};
+      results.forEach((r) => { scores[r.id] = r.score; });
+      setIntegrityScores(scores);
+    });
+  }, [projects]);
 
   const stats = {
     total: projects.length,
@@ -166,7 +217,7 @@ export default function DeveloperDashboardPage() {
                     </div>
 
                     {/* Integrity */}
-                    <IntegrityBar score={p.integrityScore} />
+                    <IntegrityBar score={integrityScores[p.id]} />
 
                     {/* Credits progress */}
                     <div>
