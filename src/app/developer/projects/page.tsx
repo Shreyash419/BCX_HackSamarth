@@ -21,6 +21,7 @@ export default function DeveloperProjectsPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<CarbonProject[]>([]);
   const [loading, setLoading] = useState(true);
+  const [integrityScores, setIntegrityScores] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== "developer")) router.push("/login");
@@ -34,6 +35,28 @@ export default function DeveloperProjectsPage() {
       });
     }
   }, [user]);
+
+  useEffect(() => {
+    if (projects.length === 0) return;
+
+    const fetchIntegrityScore = async (project: CarbonProject) => {
+      if (integrityScores[project.id] !== undefined) return;
+      try {
+        const res = await fetch("/api/integrity-score", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ description: project.description }),
+        });
+        if (!res.ok) throw new Error("API error");
+        const data = await res.json();
+        setIntegrityScores((prev) => ({ ...prev, [project.id]: data.score }));
+      } catch {
+        setIntegrityScores((prev) => ({ ...prev, [project.id]: -1 }));
+      }
+    };
+
+    Promise.all(projects.map(fetchIntegrityScore));
+  }, [projects]);
 
   return (
     <AppShell>
@@ -56,7 +79,7 @@ export default function DeveloperProjectsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  {["Project Name", "Sector", "Location", "Vintage", "Total Credits", "Available", "Price/Credit", "Integrity", "Status"].map((h) => (
+                  {["Project Name", "Sector", "Location", "Vintage", "Total Credits", "Available", "Price/Credit", "Integrity Score", "Status"].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
@@ -98,15 +121,21 @@ export default function DeveloperProjectsPage() {
                       <td className="px-4 py-3 text-xs font-mono text-green-700 text-right">{p.availableCredits.toLocaleString("en-IN")}</td>
                       <td className="px-4 py-3 text-xs font-mono text-slate-700">₹{p.pricePerCredit.toLocaleString("en-IN")}</td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${p.integrityScore >= 85 ? "bg-green-500" : p.integrityScore >= 70 ? "bg-amber-400" : "bg-red-400"}`}
-                              style={{ width: `${p.integrityScore}%` }}
-                            />
+                        {integrityScores[p.id] === undefined ? (
+                          <span className="text-xs text-slate-400 italic">Calculating...</span>
+                        ) : integrityScores[p.id] === -1 ? (
+                          <span className="text-xs text-slate-400">-</span>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${integrityScores[p.id] >= 85 ? "bg-green-500" : integrityScores[p.id] >= 70 ? "bg-amber-400" : "bg-red-400"}`}
+                                style={{ width: `${integrityScores[p.id]}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-slate-700 font-medium">{integrityScores[p.id]}</span>
                           </div>
-                          <span className="text-xs text-slate-700 font-medium">{p.integrityScore}</span>
-                        </div>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`bcx-badge border ${STATUS_STYLES[p.status]}`}>
