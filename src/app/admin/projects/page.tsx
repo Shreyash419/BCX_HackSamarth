@@ -15,7 +15,13 @@ const STATUS_STYLES: Record<ProjectStatus, string> = {
   rejected: "bg-red-50 text-red-700 border-red-200",
 };
 
-function IntegrityBar({ score }: { score: number }) {
+function IntegrityBar({ score }: { score: number | undefined }) {
+  if (score === undefined) {
+    return <span className="text-xs text-slate-400 italic">Calculating...</span>;
+  }
+  if (score === -1) {
+    return <span className="text-xs text-slate-400">-</span>;
+  }
   const color =
     score >= 85 ? "bg-green-500" : score >= 70 ? "bg-amber-400" : "bg-red-400";
   return (
@@ -36,6 +42,7 @@ export default function AdminProjectsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [filter, setFilter] = useState<ProjectStatus | "all">("all");
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [integrityScores, setIntegrityScores] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== "admin")) router.push("/login");
@@ -49,6 +56,28 @@ export default function AdminProjectsPage() {
       });
     }
   }, [user]);
+
+  useEffect(() => {
+    if (projects.length === 0) return;
+
+    const fetchIntegrityScore = async (project: CarbonProject) => {
+      if (integrityScores[project.id] !== undefined) return;
+      try {
+        const res = await fetch("/api/integrity-score", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ description: project.description }),
+        });
+        if (!res.ok) throw new Error("API error");
+        const data = await res.json();
+        setIntegrityScores((prev) => ({ ...prev, [project.id]: data.score }));
+      } catch {
+        setIntegrityScores((prev) => ({ ...prev, [project.id]: -1 }));
+      }
+    };
+
+    Promise.all(projects.map(fetchIntegrityScore));
+  }, [projects]);
 
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ msg, type });
@@ -139,7 +168,7 @@ export default function AdminProjectsPage() {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Developer</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Sector</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Credits</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Integrity</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Integrity Score</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
                 </tr>
@@ -176,7 +205,7 @@ export default function AdminProjectsPage() {
                         {p.totalCredits.toLocaleString("en-IN")}
                       </td>
                       <td className="px-4 py-4">
-                        <IntegrityBar score={p.integrityScore} />
+                        <IntegrityBar score={integrityScores[p.id]} />
                       </td>
                       <td className="px-4 py-4">
                         <span className={`bcx-badge border ${STATUS_STYLES[p.status]}`}>

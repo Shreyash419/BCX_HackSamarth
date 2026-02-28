@@ -19,7 +19,13 @@ const SECTORS = [
   "Waste Management",
 ];
 
-function IntegrityBadge({ score }: { score: number }) {
+function IntegrityBadge({ score }: { score: number | undefined }) {
+  if (score === undefined) {
+    return <span className="bcx-badge border text-[11px] bg-slate-50 text-slate-400 border-slate-200 italic">Calculating...</span>;
+  }
+  if (score === -1) {
+    return <span className="bcx-badge border text-[11px] bg-slate-50 text-slate-400 border-slate-200">-</span>;
+  }
   const { color, label } =
     score >= 85
       ? { color: "bg-green-50 text-green-700 border-green-200", label: "★ Excellent" }
@@ -35,18 +41,21 @@ function IntegrityBadge({ score }: { score: number }) {
 
 function ProjectCard({
   project,
+  integrityScore,
   onAddToCart,
 }: {
   project: CarbonProject;
+  integrityScore: number | undefined;
   onAddToCart: (p: CarbonProject, qty: number) => void;
 }) {
   const [qty, setQty] = useState(100);
   const [expanded, setExpanded] = useState(false);
 
+  const displayScore = integrityScore !== undefined && integrityScore !== -1 ? integrityScore : 0;
   const barColor =
-    project.integrityScore >= 85
+    displayScore >= 85
       ? "bg-green-500"
-      : project.integrityScore >= 70
+      : displayScore >= 70
       ? "bg-amber-400"
       : "bg-red-400";
 
@@ -77,14 +86,16 @@ function ProjectCard({
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-xs text-slate-500">Integrity Score</span>
-            <IntegrityBadge score={project.integrityScore} />
+            <IntegrityBadge score={integrityScore} />
           </div>
-          <div className="integrity-bar">
-            <div
-              className={`integrity-fill ${barColor}`}
-              style={{ width: `${project.integrityScore}%` }}
-            />
-          </div>
+          {integrityScore !== undefined && integrityScore !== -1 && (
+            <div className="integrity-bar">
+              <div
+                className={`integrity-fill ${barColor}`}
+                style={{ width: `${displayScore}%` }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Availability */}
@@ -163,6 +174,7 @@ export default function MarketplacePage() {
   const [sector, setSector] = useState("All");
   const [sortBy, setSortBy] = useState<"price" | "score" | "credits">("score");
   const [toast, setToast] = useState("");
+  const [integrityScores, setIntegrityScores] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!isLoading && !user) router.push("/login");
@@ -176,6 +188,28 @@ export default function MarketplacePage() {
       });
     }
   }, [user]);
+
+  useEffect(() => {
+    if (projects.length === 0) return;
+
+    const fetchIntegrityScore = async (project: CarbonProject) => {
+      if (integrityScores[project.id] !== undefined) return;
+      try {
+        const res = await fetch("/api/integrity-score", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ description: project.description }),
+        });
+        if (!res.ok) throw new Error("API error");
+        const data = await res.json();
+        setIntegrityScores((prev) => ({ ...prev, [project.id]: data.score }));
+      } catch {
+        setIntegrityScores((prev) => ({ ...prev, [project.id]: -1 }));
+      }
+    };
+
+    Promise.all(projects.map(fetchIntegrityScore));
+  }, [projects]);
 
   const filtered = useMemo(() => {
     let res = [...projects];
@@ -192,11 +226,11 @@ export default function MarketplacePage() {
 
     res.sort((a, b) => {
       if (sortBy === "price") return a.pricePerCredit - b.pricePerCredit;
-      if (sortBy === "score") return b.integrityScore - a.integrityScore;
+      if (sortBy === "score") return (integrityScores[b.id] ?? 0) - (integrityScores[a.id] ?? 0);
       return b.availableCredits - a.availableCredits;
     });
     return res;
-  }, [projects, search, sector, sortBy]);
+  }, [projects, search, sector, sortBy, integrityScores]);
 
   const handleAddToCart = (project: CarbonProject, qty: number) => {
     addItem({
@@ -300,7 +334,7 @@ export default function MarketplacePage() {
         ) : (
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 stagger-children">
             {filtered.map((p) => (
-              <ProjectCard key={p.id} project={p} onAddToCart={handleAddToCart} />
+              <ProjectCard key={p.id} project={p} integrityScore={integrityScores[p.id]} onAddToCart={handleAddToCart} />
             ))}
           </div>
         )}
